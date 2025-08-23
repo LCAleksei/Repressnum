@@ -1,6 +1,6 @@
 # Repressnum - 性压抑指数生成器
 
-> 基于 [@Akanyi/Gaynum](https://github.com/Akanyi/Gaynum) 重写
+> 基于 [@Akanyi/Gaynum](https://github.com/Akanyi/Gaynum) 更改
 
 ## 📕 更改内容
 
