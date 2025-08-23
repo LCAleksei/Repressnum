@@ -1,4 +1,4 @@
-# FemboyNum - AI驱动的男娘指数分析器
+# Repressnum - 性压抑指数生成器
 
 > 基于 [@Akanyi/Gaynum](https://github.com/Akanyi/Gaynum) 重写
 
