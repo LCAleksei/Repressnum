@@ -118,11 +118,6 @@
             50% { transform: translateY(-8px); }
         }
         .card-float { animation: card-float 3s ease-in-out infinite; }
-        
-        @keyframes title-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
     </style>
 </head>
 <body class="flex items-center justify-center p-4">
@@ -421,7 +416,7 @@
             }
 
             // 更新浏览器标题动画
-            function updateTitleAnimation(percentage) {
+            function updateTitleAnimation(percentage, isFinalResult = false) {
                 if (titleAnimationId) {
                     cancelAnimationFrame(titleAnimationId);
                 }
@@ -430,10 +425,19 @@
                 const titlePrefix = t.mainTitle;
                 
                 function animateTitle() {
-                    document.title = `进度... ${percentage.toFixed(4)}% - ${titlePrefix}`;
+                    if (isFinalResult) {
+                        document.title = `结果... ${percentage.toFixed(4)}% - ${titlePrefix}`;
+                    } else {
+                        document.title = `进度... ${percentage.toFixed(4)}% - ${titlePrefix}`;
+                    }
                     
-                    if (percentage < 100) {
+                    if (percentage < 100 && !isFinalResult) {
                         titleAnimationId = requestAnimationFrame(animateTitle);
+                    } else if (isFinalResult) {
+                        // 结果显示五秒后恢复正常
+                        setTimeout(() => {
+                            document.title = originalTitle;
+                        }, 5000);
                     } else {
                         // 最终恢复原标题
                         setTimeout(() => {
@@ -444,7 +448,6 @@
                 
                 animateTitle();
             }
-
 
             function setLanguage(lang) {
                 currentLanguage = lang;
@@ -683,7 +686,7 @@
                 elements.resultSection.classList.remove('hidden');
                 elements.shareButton.classList.remove('hidden');
                 elements.resultMessage.textContent = '';
-                elements.percentageText.textContent = '0.0%';
+                elements.percentageText.textContent = '0%';
                 elements.progressBar.style.width = '0%';
                 elements.progressBar.style.backgroundColor = getProgressBarColor(0);
                 elements.fixedNameBadge.classList.toggle('hidden', !isFixed);
@@ -723,13 +726,21 @@
                         elements.resultSection.classList.add('card-float');
                     }
                     
-                    const roundedPercentage = Math.round(currentPercentage);
-                    elements.percentageText.textContent = `${currentPercentage.toFixed(4)}%`;
+                    // 根据数值决定是否显示小数点
+                    if (currentPercentage % 1 === 0) {
+                        elements.percentageText.textContent = `${Math.round(currentPercentage)}%`;
+                    } else {
+                        elements.percentageText.textContent = `${currentPercentage.toFixed(4)}%`;
+                    }
                     elements.progressBar.style.width = `${currentPercentage}%`;
                     elements.progressBar.style.backgroundColor = getProgressBarColor(currentPercentage);
                     
                     // 更新浏览器标题动画
-                    updateTitleAnimation(currentPercentage);
+                    if (currentPercentage >= percentage) {
+                        updateTitleAnimation(currentPercentage, true); // 传递 true 表示是最终结果
+                    } else {
+                        updateTitleAnimation(currentPercentage);
+                    }
                     
                     if (currentPercentage > 20) {
                         elements.percentageText.style.opacity = '1';
