@@ -94,6 +94,35 @@
             border-radius: 8px;
             font-size: 0.8rem;
         }
+        
+        /* 新增动画样式 */
+        @keyframes input-glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.3); }
+            50% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.7); }
+        }
+        .input-glow { animation: input-glow 2s infinite ease-in-out; }
+        
+        @keyframes ripple {
+            to { transform: scale(4); opacity: 0; }
+        }
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.4);
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+        }
+        
+        @keyframes card-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .card-float { animation: card-float 3s ease-in-out infinite; }
+        
+        @keyframes title-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body class="flex items-center justify-center p-4">
@@ -139,7 +168,7 @@
 
         <div class="space-y-4">
             <input type="text" id="nameInput" placeholder="输入任何名字或网名" class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300">
-            <button id="calculateBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 active:scale-95 shadow-lg">
+            <button id="calculateBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 active:scale-95 shadow-lg relative overflow-hidden">
                 <span id="btnText">开始计算</span>
                 <span id="btnSpinner" class="hidden animate-spin">◐</span>
             </button>
@@ -369,7 +398,53 @@
             };
 
             let typingInterval;
+            let titleAnimationId;
             let currentLanguage = 'zh-CN';
+            let originalTitle = document.title;
+
+            // 添加按钮涟漪效果
+            function createRipple(event) {
+                const button = event.currentTarget;
+                const circle = document.createElement("span");
+                const diameter = Math.max(button.clientWidth, button.clientHeight);
+                const radius = diameter / 2;
+
+                circle.style.width = circle.style.height = `${diameter}px`;
+                circle.style.left = `${event.clientX - button.getBoundingClientRect().left - radius}px`;
+                circle.style.top = `${event.clientY - button.getBoundingClientRect().top - radius}px`;
+                circle.classList.add("ripple");
+
+                const ripple = button.getElementsByClassName("ripple")[0];
+                if (ripple) ripple.remove();
+
+                button.appendChild(circle);
+            }
+
+            // 更新浏览器标题动画
+            function updateTitleAnimation(percentage) {
+                if (titleAnimationId) {
+                    cancelAnimationFrame(titleAnimationId);
+                }
+                
+                const t = translations[currentLanguage];
+                const titlePrefix = t.mainTitle;
+                
+                function animateTitle() {
+                    document.title = `进度... ${percentage.toFixed(4)}% - ${titlePrefix}`;
+                    
+                    if (percentage < 100) {
+                        titleAnimationId = requestAnimationFrame(animateTitle);
+                    } else {
+                        // 最终恢复原标题
+                        setTimeout(() => {
+                            document.title = originalTitle;
+                        }, 2000);
+                    }
+                }
+                
+                animateTitle();
+            }
+
 
             function setLanguage(lang) {
                 currentLanguage = lang;
@@ -585,164 +660,194 @@
                 return colors[colors.length - 1].color;
             }
 
-            function typeResultMessage(message) {
+            function typeWriter(text, element, speed = 30) {
                 clearInterval(typingInterval);
-                elements.resultMessage.textContent = '';
+                element.textContent = '';
                 let i = 0;
                 typingInterval = setInterval(() => {
-                    if (i < message.length) {
-                        elements.resultMessage.textContent += message.charAt(i);
+                    if (i < text.length) {
+                        element.textContent += text.charAt(i);
                         i++;
-                    } else clearInterval(typingInterval);
-                }, 50);
+                    } else {
+                        clearInterval(typingInterval);
+                    }
+                }, speed);
             }
 
-            function displayResult(name, percentage, message = null, isFixed = false) { 
-                // 使用textContent而不是innerHTML来防止XSS
-                elements.resultName.textContent = name;
+            function displayResult(name, percentage, message, isFixed = false) {
+                // 转义用户输入以防止XSS
+                const escapedName = escapeHtml(name);
+                const escapedMessage = escapeHtml(message);
+                
+                elements.resultName.textContent = escapedName;
                 elements.resultSection.classList.remove('hidden');
                 elements.shareButton.classList.remove('hidden');
-                elements.githubLink.classList.remove('hidden');
+                elements.resultMessage.textContent = '';
+                elements.percentageText.textContent = '0.0%';
+                elements.progressBar.style.width = '0%';
+                elements.progressBar.style.backgroundColor = getProgressBarColor(0);
                 elements.fixedNameBadge.classList.toggle('hidden', !isFixed);
                 
-                if (percentage === 100) {
-                    const country = countryMap[currentLanguage];
-                    const alertText = translations[currentLanguage].countryAlert.replace('{}', country);
+                // 添加卡片浮现动画
+                elements.resultSection.classList.add('pop-in');
+                
+                // 只有当进度≥100%时才显示国家传播提示
+                if (percentage >= 100) {
+                    const countryName = countryMap[currentLanguage];
+                    const t = translations[currentLanguage];
+                    const alertText = t.countryAlert.replace('{}', countryName);
                     elements.countryAlertText.textContent = alertText;
                     elements.countryAlert.classList.remove('hidden');
-                } else elements.countryAlert.classList.add('hidden');
+                    elements.countryAlert.classList.add('card-float'); // 添加浮动动画
+                } else {
+                    elements.countryAlert.classList.add('hidden');
+                }
                 
-                elements.percentageText.style.opacity = 0;
-                elements.resultMessage.textContent = '';
-                elements.percentageText.classList.remove('pop-in');
-                elements.progressBar.classList.remove('pulsing-glow');
+                elements.githubLink.classList.remove('hidden');
                 
-                setTimeout(() => elements.progressBar.classList.add('pulsing-glow'), 100);
-
-                let currentPercent = -1;
-                const interval = setInterval(() => {
-                    currentPercent++;
-                    if (currentPercent >= percentage) {
-                        clearInterval(interval);
-                        currentPercent = percentage;
-                        elements.percentageText.textContent = `${currentPercent}%`;
-                        elements.percentageText.style.opacity = 1;
-                        elements.percentageText.classList.add('pop-in');
-                        const finalMessage = message || getResultMessage(percentage, name, isFixed);
-                        typeResultMessage(finalMessage);
-                        setTimeout(() => elements.progressBar.classList.remove('pulsing-glow'), 500);
-                        saveHistory(name, percentage, finalMessage, isFixed);
+                // 启动浏览器标题动画
+                updateTitleAnimation(0);
+                
+                let currentPercentage = 0;
+                const increment = percentage / 50;
+                const progressInterval = setInterval(() => {
+                    currentPercentage += increment;
+                    if (currentPercentage >= percentage) {
+                        currentPercentage = percentage;
+                        clearInterval(progressInterval);
+                        
+                        // 进度完成后显示完整消息
+                        typeWriter(escapedMessage, elements.resultMessage, 50);
+                        
+                        // 添加轻微浮动动画到结果卡片
+                        elements.resultSection.classList.add('card-float');
                     }
-                    elements.progressBar.style.width = `${currentPercent}%`;
-                    elements.progressBar.style.backgroundColor = getProgressBarColor(currentPercent);
-                    if(currentPercent !== -1) {
-                       elements.percentageText.textContent = `${currentPercent}%`;
-                       elements.percentageText.style.opacity = 1;
+                    
+                    const roundedPercentage = Math.round(currentPercentage);
+                    elements.percentageText.textContent = `${currentPercentage.toFixed(4)}%`;
+                    elements.progressBar.style.width = `${currentPercentage}%`;
+                    elements.progressBar.style.backgroundColor = getProgressBarColor(currentPercentage);
+                    
+                    // 更新浏览器标题动画
+                    updateTitleAnimation(currentPercentage);
+                    
+                    if (currentPercentage > 20) {
+                        elements.percentageText.style.opacity = '1';
                     }
                 }, 20);
             }
 
-            async function handleShare() {
-                const name = elements.resultName.textContent;
+            function calculateRepression() {
+                const name = elements.nameInput.value.trim();
                 if (!name) {
-                    alert(currentLanguage === 'zh-CN' ? '请先计算一个结果再分享！' : 'Please calculate a result first!');
-                    return;
-                }
-                const dataToEncode = `name=${encodeURIComponent(name)}`;
-                const encodedData = encodeBase64(dataToEncode);
-                const shareUrl = `${window.location.origin}${window.location.pathname}?data=${encodedData}`;
-                try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    alert((currentLanguage === 'zh-CN' ? '分享链接已复制到剪贴板：' : 'Share link copied to clipboard: ') + shareUrl);
-                } catch (error) {
-                    alert(currentLanguage === 'zh-CN' ? '复制链接失败，请手动复制。' : 'Failed to copy link, please copy manually.');
-                }
-            }
-
-            function handleCalculation() {
-                const originalName = elements.nameInput.value;
-                const trimmedName = originalName.trim();
-                if (!trimmedName) {
                     elements.nameInput.classList.add('shake');
                     setTimeout(() => elements.nameInput.classList.remove('shake'), 500);
                     return;
                 }
+                
+                // 添加输入框微光效果
+                elements.nameInput.classList.add('input-glow');
+                setTimeout(() => elements.nameInput.classList.remove('input-glow'), 2000);
+                
                 elements.btnText.classList.add('hidden');
                 elements.btnSpinner.classList.remove('hidden');
-                elements.calculateBtn.disabled = true;
-                elements.resultSection.classList.add('hidden');
-                elements.shareButton.classList.add('hidden');
-                elements.githubLink.classList.add('hidden');
                 
-                clearInterval(typingInterval);
-
                 setTimeout(() => {
+                    const normalized = normalizeName(name);
+                    const values = getNumericValues(normalized);
+                    
                     const t = translations['zh-CN'];
                     const fixedNameKeys = Object.keys(t.specialNames);
                     let isFixed = false;
-                    let fixedPercentage = null;
-                    let fixedMessage = null;
-                    
                     for (const key of fixedNameKeys) {
-                        if (trimmedName.toLowerCase() === key.toLowerCase()) {
+                        if (name.toLowerCase() === key.toLowerCase()) {
                             isFixed = true;
-                            fixedPercentage = t.specialNames[key].percentage;
-                            fixedMessage = t.specialNames[key].message;
                             break;
                         }
                     }
                     
-                    if (isFixed) displayResult(trimmedName, fixedPercentage, fixedMessage, true);
-                    else {
-                        const normalizedParts = normalizeName(trimmedName);
-                        const numericValues = getNumericValues(normalizedParts);
-                        const finalPercentage = repressionCalculation(numericValues, trimmedName);
-                        displayResult(trimmedName, finalPercentage);
-                    }
+                    const percentage = repressionCalculation(values, name);
+                    const message = getResultMessage(percentage, name, isFixed);
+                    
+                    displayResult(name, percentage, message, isFixed);
+                    saveHistory(name, percentage, message, isFixed);
                     
                     elements.btnText.classList.remove('hidden');
                     elements.btnSpinner.classList.add('hidden');
-                    elements.calculateBtn.disabled = false;
-                }, 800);
+                }, 1000);
             }
 
-            function checkUrlParams() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const encodedData = urlParams.get('data');
-                if (encodedData) {
-                    const decodedData = decodeBase64(encodedData);
-                    if (decodedData) {
-                        const params = new URLSearchParams(decodedData);
-                        const name = params.get('name');
-                        if (name) {
-                            elements.nameInput.value = name;
-                            handleCalculation();
-                        }
-                    }
-                }
-            }
-
-            const savedLanguage = localStorage.getItem('repressionLanguage') || 'zh-CN';
-            elements.languageSelect.value = savedLanguage;
-            setLanguage(savedLanguage);
-
-            elements.languageSelect.addEventListener('change', (e) => setLanguage(e.target.value));
-            elements.calculateBtn.addEventListener('click', handleCalculation);
-            elements.nameInput.addEventListener('keyup', (event) => { if (event.key === 'Enter') handleCalculation(); });
-            elements.shareButton.addEventListener('click', handleShare);
-            elements.historyToggleBtn.addEventListener('click', () => elements.historyPanel.classList.toggle('hidden'));
-            elements.historyList.addEventListener('click', (event) => {
-                if (event.target.classList.contains('recall-history')) recallHistoryItem(event.target.dataset.index);
+            // 事件监听器
+            elements.calculateBtn.addEventListener('click', (e) => {
+                createRipple(e);
+                calculateRepression();
             });
+
+            elements.nameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    calculateRepression();
+                }
+            });
+
+            elements.shareButton.addEventListener('click', () => {
+                const name = elements.nameInput.value.trim();
+                if (!name) return;
+                
+                const resultUrl = `${window.location.origin}${window.location.pathname}?name=${encodeURIComponent(name)}`;
+                if (navigator.share) {
+                    navigator.share({
+                        title: translations[currentLanguage].mainTitle,
+                        text: `${name}的性压抑指数计算结果`,
+                        url: resultUrl
+                    }).catch(() => {
+                        navigator.clipboard.writeText(resultUrl).then(() => {
+                            alert(currentLanguage === 'zh-CN' ? '链接已复制到剪贴板！' : 'Link copied to clipboard!');
+                        });
+                    });
+                } else {
+                    navigator.clipboard.writeText(resultUrl).then(() => {
+                        alert(currentLanguage === 'zh-CN' ? '链接已复制到剪贴板！' : 'Link copied to clipboard!');
+                    });
+                }
+            });
+
+            elements.historyToggleBtn.addEventListener('click', () => {
+                elements.historyPanel.classList.toggle('hidden');
+            });
+
             elements.clearHistoryBtn.addEventListener('click', () => {
-                if (confirm(currentLanguage === 'zh-CN' ? '确定要清除所有历史记录吗？' : 'Are you sure you want to clear all history?')) {
-                    localStorage.removeItem('repressionHistory');
-                    renderHistory();
+                localStorage.removeItem('repressionHistory');
+                renderHistory();
+            });
+
+            elements.historyList.addEventListener('click', (e) => {
+                if (e.target.classList.contains('recall-history')) {
+                    const index = parseInt(e.target.dataset.index);
+                    recallHistoryItem(index);
                 }
             });
+
+            elements.languageSelect.addEventListener('change', (e) => {
+                setLanguage(e.target.value);
+            });
+
+            // 初始化
+            const savedLanguage = localStorage.getItem('repressionLanguage');
+            if (savedLanguage && translations[savedLanguage]) {
+                elements.languageSelect.value = savedLanguage;
+                setLanguage(savedLanguage);
+            } else {
+                setLanguage(currentLanguage);
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const nameParam = urlParams.get('name');
+            if (nameParam) {
+                elements.nameInput.value = decodeURIComponent(nameParam);
+                calculateRepression();
+            }
 
             renderHistory();
-            checkUrlParams();
         };
     </script>
 </body>
