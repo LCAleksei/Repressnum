@@ -178,6 +178,17 @@
 
     <script>
         window.onload = function() {
+            // HTML转义函数 - 防止XSS攻击
+            function escapeHtml(unsafe) {
+                if (!unsafe) return '';
+                return unsafe
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
             const translations = {
                 'zh-CN': {
                     history: '历史记录',
@@ -236,7 +247,7 @@
                 'ko-KR': {
                     history: '기록',
                     clearHistory: '기록 지우기',
-                    historyNote: '귀하の入力 정보를 사용하지 않으며, 결과는 오락 목적으로만 제공됩니다.',
+                    historyNote: '귀하의 입력 정보를 사용하지 않으며, 결과는 오락 목적으로만 제공됩니다.',
                     share: '공유',
                     mainTitle: '성 억압 지수 계산기',
                     subTitle: '이름을 입력하여 "과학적인" 결과를 확인하세요!',
@@ -395,8 +406,19 @@
             }
 
             function saveHistory(name, percentage, message, isFixed = false) {
+                // 转义用户输入以防止XSS
+                const escapedName = escapeHtml(name);
+                const escapedMessage = escapeHtml(message);
+                
                 let history = JSON.parse(localStorage.getItem('repressionHistory') || '[]');
-                history.unshift({ name, percentage, message, isFixed, timestamp: new Date().toLocaleString(), language: currentLanguage });
+                history.unshift({ 
+                    name: escapedName, 
+                    percentage, 
+                    message: escapedMessage, 
+                    isFixed, 
+                    timestamp: new Date().toLocaleString(), 
+                    language: currentLanguage 
+                });
                 if (history.length > 10) history = history.slice(0, 10);
                 localStorage.setItem('repressionHistory', JSON.stringify(history));
                 renderHistory();
@@ -405,25 +427,54 @@
             function renderHistory() {
                 const history = JSON.parse(localStorage.getItem('repressionHistory') || '[]');
                 elements.historyList.innerHTML = '';
+                
                 if (history.length === 0) {
-                    elements.historyList.innerHTML = `<li class="text-gray-500">${currentLanguage === 'zh-CN' ? '暂无历史记录' : 'No history yet'}</li>`;
+                    const emptyItem = document.createElement('li');
+                    emptyItem.className = 'text-gray-500';
+                    emptyItem.textContent = currentLanguage === 'zh-CN' ? '暂无历史记录' : 'No history yet';
+                    elements.historyList.appendChild(emptyItem);
                     return;
                 }
+                
                 history.forEach((item, index) => {
                     const listItem = document.createElement('li');
                     listItem.className = 'p-2 bg-gray-700 rounded-md flex justify-between items-center cursor-pointer hover:bg-gray-600 transition duration-200';
-                    let nameDisplay = item.name;
-                    if (item.isFixed) nameDisplay += `<span class="fixed-name-tag">${currentLanguage === 'zh-CN' ? '固定' : 'Fixed'}</span>`;
-                    listItem.innerHTML = `
-                        <div class="flex-grow min-w-0">
-                            <span class="font-semibold text-blue-300">${nameDisplay}</span>: 
-                            <span class="font-bold text-white">${item.percentage}%</span>
-                            <p class="text-xs text-gray-400 mt-1 truncate">${item.message}</p>
-                        </div>
-                        <button class="recall-history text-blue-400 hover:text-blue-300 text-sm flex-shrink-0 whitespace-nowrap ml-2 px-3 py-1 rounded-md border border-blue-400 hover:bg-blue-700 transition duration-200" data-index="${index}">
-                            ${currentLanguage === 'zh-CN' ? '查看' : 'View'}
-                        </button>
-                    `;
+                    
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'flex-grow min-w-0';
+                    
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'font-semibold text-blue-300';
+                    nameSpan.textContent = item.name;
+                    
+                    const percentageSpan = document.createElement('span');
+                    percentageSpan.className = 'font-bold text-white';
+                    percentageSpan.textContent = `: ${item.percentage}%`;
+                    
+                    const messageP = document.createElement('p');
+                    messageP.className = 'text-xs text-gray-400 mt-1 truncate';
+                    messageP.textContent = item.message;
+                    
+                    contentDiv.appendChild(nameSpan);
+                    contentDiv.appendChild(percentageSpan);
+                    contentDiv.appendChild(messageP);
+                    
+                    // 添加固定标签（如果需要）
+                    if (item.isFixed) {
+                        const fixedTag = document.createElement('span');
+                        fixedTag.className = 'fixed-name-tag';
+                        fixedTag.textContent = currentLanguage === 'zh-CN' ? '固定' : 'Fixed';
+                        contentDiv.appendChild(fixedTag);
+                    }
+                    
+                    const recallButton = document.createElement('button');
+                    recallButton.className = 'recall-history text-blue-400 hover:text-blue-300 text-sm flex-shrink-0 whitespace-nowrap ml-2 px-3 py-1 rounded-md border border-blue-400 hover:bg-blue-700 transition duration-200';
+                    recallButton.dataset.index = index;
+                    recallButton.textContent = currentLanguage === 'zh-CN' ? '查看' : 'View';
+                    
+                    listItem.appendChild(contentDiv);
+                    listItem.appendChild(recallButton);
+                    
                     elements.historyList.appendChild(listItem);
                 });
             }
@@ -547,6 +598,7 @@
             }
 
             function displayResult(name, percentage, message = null, isFixed = false) { 
+                // 使用textContent而不是innerHTML来防止XSS
                 elements.resultName.textContent = name;
                 elements.resultSection.classList.remove('hidden');
                 elements.shareButton.classList.remove('hidden');
